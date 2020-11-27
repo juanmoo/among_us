@@ -15,10 +15,27 @@ class Agent:
   def distance_to(self, loc):
     return np.linalg.norm(self.location - loc)
 
-  def get_action():
+  def get_observation(self):
+    base_world = np.copy(self.world.map)
+    mask = np.zeros((self.world.n, self.world.n))
+    vr = int(self.vision_radius)
+    cr, cc = self.location
+    for i in range(-1 * vr, vr + 1):
+      for j in range(-1 * vr, vr + 1):
+        in_map_r = (0 <= cr + i < self.world.n)
+        in_map_c = (0 <= cc + j < self.world.n)
+        in_map = in_map_r and in_map_c
+        if in_map and i**2 + j**2 <= self.vision_radius**2:
+          mask[cr + i, cc + j] = 1.0
+
+    obs = (base_world, self.world.agent_map * mask)
+
+    return obs
+
+  def get_action(self):
     pass
 
-  def update_location(move_action):
+  def update_location(self, move_action):
     # 0: up
     # 1: up + right
     # 2: right
