@@ -1,7 +1,7 @@
 from amongus.agent import Crewmate, Impostor
 from amongus.world import World
-import random
 import numpy as np
+import random
 
 class Game:
 
@@ -43,6 +43,7 @@ class Game:
             self.agents.append(Impostor(i, self.world, locs[i], vision_radius=self.agent_vision_radius, kill_distance=self.kill_distance))
         else:
             self.agents.append(Crewmate(i, self.world, locs[i], vision_radius=self.agent_vision_radius))
+    self.world.set_agent_list(self.agents)
 
     # Whether the game is ongoing
     self.ongoing = True
@@ -53,7 +54,7 @@ class Game:
     # The reward they got,
     # Whether the game is done 
     to_kill = None
-    rewards = np.zeroes(num_agents)
+    rewards = np.zeroes(self.num_agents)
     
     for agent in self.agents:
         # Dead agents cannot do anything
@@ -121,11 +122,7 @@ class Game:
     pass
 
   def __repr__(self) -> str:
-    world_arr = np.array(self.world.map, dtype=object)
-    for agent in self.agents:
-      char = 'C' if agent.agent_type == 'Crewmate' else 'I'
-      r, c = agent.location
-      world_arr[r, c] = char
+    world_arr = np.array(np.maximum(self.world.map, self.world.agent_map), dtype=object)
     
     def make_blank(x):
       if x == 0.0:
@@ -133,14 +130,14 @@ class Game:
       elif x == 1.0:
         return 'G'
       else:
-        return x
+        return 'A{:^1d}'.format(int(x - World.agent_offset))
 
     make_blank = np.vectorize(make_blank)
     world_arr = make_blank(world_arr)
 
-    out = '-' * (4 * len(world_arr[0]) + 2) + '\n'
+    out = '-' * (6 * len(world_arr[0]) + 2) + '\n'
     for row in world_arr:
-      fstring = '{:^3s}|' * len(row)
+      fstring = '{:^5s}|' * len(row)
       out += '|' + fstring[:-1].format(*row) + '|' + '\n'
-      out += '-' * (4 * len(row) + 2) + '\n'
+      out += '-' * (6 * len(row) + 2) + '\n'
     return out
