@@ -9,19 +9,24 @@ class Game:
   params = {
     'kill_distance': 1,
     'agent_vision_radius': 3,
-    'task_reward': 3
+    'task_reward': 3,
+    'win_reward': 100,
+    'kill_reward': 3
   }
 
-  def __init__(self, map_size, num_tasks, num_agents, max_steps, params=params):
+  def __init__(self, map_size, num_tasks, num_agents, max_steps, vote_period, params=params):
     self.n = map_size
     self.t = num_tasks
     self.num_agents = num_agents
     self.max_steps = max_steps
+    self.vote_period = vote_period
     
     # Game Parameters
     self.kill_distance = params.get('kill_distance', Game.params['kill_distance'])
     self.agent_vision_radius = params.get('agent_vision_radius', Game.params['agent_vision_radius'])
     self.task_reward = params.get('task_reward', Game.params['task_reward'])
+    self.win_reward = params.get('win_reward', Game.params['win_reward'])
+    self.kill_reward = params.get('win_reward', Game.params['kill_reward'])
 
     self.reset()
 
@@ -73,53 +78,47 @@ class Game:
             if agent.id != self.impostor_index:
                 continue
 
-            # We are killing this person, they die in the next round
-            to_kill = action[2] # We migh want to just kill whoever is within distance for the impostor ?
-            can_kill = agent.distance_to(self.agents[to_kill]) <= self.kill_distance
-
-            if can_kill:
-                pass
-                # rewards[agent]
-
-            else:
-                to_kill = None
+            if self.agents[to_kill].alive and agent.distance_to(self.agents[to_kill].location) <= self.kill_distance:
+                to_kill = action[2] # We migh want to just kill whoever is within distance for the impostor ?
 
         elif action[0] == 1:
-            # We are moving
-            new_location = agent.update_location(action[1])
-            task_done = self.world.check_task_accomplished(new_location)
+            # We move, we move
+            task_done = self.world.move_agent(agent.id, action[1])
             if task_done:
-                rewards[agent.id] = self.task_reward    
+                rewards[agent.id] = self.task_reward
+    
+    # Check task win condition
+    if self.world.tasks_left <= 0:
+        add_rewards = self.win_reward * np.ones(self.num_agents)
+        add_rewards[self.impostor_index] = -self.win_reward # Or 0?
+        rewards = rewards + add_rewards # I think this does what I want it to...
+        self.ongoing = False
+        # Return something
+    
+    # Kill someone
+    if to_kill is not None:
+        self.world.kill_agent(to_kill)
+        dead_agent = self.agent[to_kill]
+        dead_agent.alive = False
+        r,c = dead_agent.location
+        self.world.agent_map[r,c] = 0.0
+        rewards[self.impostor_index] = self.kill_reward
+    
+    # Check kill win condition
+    if self.world.num_agents <= 2:
+        add_rewards = -self.win_reward * np.ones(self.num_agents) # Or 0?
+        add_rewards[self.impostor_index] = self.win_reward
+        rewards = rewards + add_rewards # I think this does what I want it to...
+        self.ongoing = False
+        # Return something
+    
+    # TODO: voting someone out and winning based off that
+    if (self.num_steps + 1) % self.vote_period == 0:
+        # Perform voting
     
     self.num_steps += 1
     if self.num_steps >= self.max_steps:
         self.ongoing = False
-        
-
-  def get_observation(self, agent):
-    # Get a 2*vision_radius+1 size square representing what the agent can see
-    pass
-
-  def generate_agent_rewards(self, agent):
-    # If the agent is an crewmate in the square and the task was just done,
-    # award the agent for doing the task
-    # If the agent is an impostor and they just killed someone, award the agent 
-    # for killing them
-    
-    pass
-  
-  def generate_rewards(self):
-    rewards = []
-    for agent in self.agents:
-        rewards.append(generate_agent_rewards(agent))
-    return np.array(rewards)
-
-  def transition(self, actions):
-    # Transition the world state, where actions is 
-    # an array of the actions of each agent 
-    # Actions are move or kill 
-    
-    pass
 
   def __repr__(self) -> str:
     world_arr = np.array(np.maximum(self.world.map, self.world.agent_map), dtype=object)
@@ -128,9 +127,9 @@ class Game:
       if x == 0.0:
         return ''
       elif x == 1.0:
-        return 'G'
+        return 'G' # Goal Location
       else:
-        return 'A{:^1d}'.format(int(x - World.agent_offset))
+        return 'A{:^d}'.format(int(x - World.agent_offset))
 
     make_blank = np.vectorize(make_blank)
     world_arr = make_blank(world_arr)
