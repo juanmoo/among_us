@@ -11,7 +11,8 @@ class Game:
     'agent_vision_radius': 3,
     'task_reward': 3,
     'win_reward': 100,
-    'kill_reward': 3
+    'kill_reward': 3,
+    'message_length': 1
   }
 
   def __init__(self, map_size, num_tasks, num_agents, max_steps, vote_period, params=params):
@@ -27,6 +28,7 @@ class Game:
     self.task_reward = params.get('task_reward', Game.params['task_reward'])
     self.win_reward = params.get('win_reward', Game.params['win_reward'])
     self.kill_reward = params.get('win_reward', Game.params['kill_reward'])
+    self.message_length = params.get('message_length', Game.params['message_length'])
 
     self.reset()
 
@@ -45,9 +47,9 @@ class Game:
     self.agents = []
     for i in range(self.num_agents):
         if i == self.impostor_index:
-            self.agents.append(Impostor(i, self.world, locs[i], vision_radius=self.agent_vision_radius, kill_distance=self.kill_distance))
+            self.agents.append(Impostor(i, self.world, locs[i], vision_radius=self.agent_vision_radius, message_length=self.message_length, kill_distance=self.kill_distance))
         else:
-            self.agents.append(Crewmate(i, self.world, locs[i], vision_radius=self.agent_vision_radius))
+            self.agents.append(Crewmate(i, self.world, locs[i], message_length=self.message_length, vision_radius=self.agent_vision_radius))
     self.world.set_agent_list(self.agents)
 
     # Whether the game is ongoing
@@ -59,33 +61,62 @@ class Game:
     # The reward they got,
     # Whether the game is done 
     to_kill = None
-    rewards = np.zeroes(self.num_agents)
+    rewards = np.zeros(self.num_agents)
+    votes = []
     
     for agent in self.agents:
-        # Dead agents cannot do anything
-        if not agent.alive:
-            continue 
+        
 
         action = agent.get_action()
         # Assume action to be a row vector 
         # Index 0 represents kill(0) or move(1)
         # Index 1 represents which direction to move
-        # Index 2 represents who to kill
+        # Index 2 represents kick vote
         # Remainder of the k*(n-1) indices represent messages to each other agent
+
+        # Record Vote
+        votes.append(action[2])
+
+        # Dead agents cannot do anything
+        if not agent.alive:
+            continue 
 
         if action[0] == 0:
             # Only the impostor can kill someone else 
             if agent.id != self.impostor_index:
                 continue
 
-            if self.agents[to_kill].alive and agent.distance_to(self.agents[to_kill].location) <= self.kill_distance:
-                to_kill = action[2] # We migh want to just kill whoever is within distance for the impostor ?
+            # Choose closest alive agent within killing distance to kill
+            visible_agents = agent.sense_agents()
+            for va in visible_agents:
+              if va.alive and agent.distance_to(va.location) <= self.kill_distance:
+                  to_kill = va
+                  break
 
         elif action[0] == 1:
             # We move, we move
             task_done = self.world.move_agent(agent.id, action[1])
             if task_done:
                 rewards[agent.id] = self.task_reward
+
+    # Kill someone
+    if to_kill is not None:
+        print('Agent {} killed agent {}'.format(self.impostor_index, to_kill.id))
+        self.world.kill_agent(to_kill.id)
+        dead_agent = self.agents[to_kill.id]
+        rewards[self.impostor_index] += self.kill_reward
+        rewards[dead_agent.id] -= self.kill_reward
+
+    # Perform voting
+    if (self.num_steps + 1) % self.vote_period == 0:
+        votes = [v for j, v in enumerate(votes) if self.agents[j].alive]
+        print(set(votes))
+        to_kick = max(set(votes), key=votes.count)
+        to_kick = int(to_kick)
+
+        if 0 <= to_kick < len(self.agents) and self.agents[to_kick].alive:
+          print('{} Agents voted to kick Agent {}'.format(self.world.num_agents, to_kick))
+          self.world.kill_agent(to_kick)
     
     # Check task win condition
     if self.world.tasks_left <= 0:
@@ -95,30 +126,26 @@ class Game:
         self.ongoing = False
         # Return something
     
-    # Kill someone
-    if to_kill is not None:
-        self.world.kill_agent(to_kill)
-        dead_agent = self.agent[to_kill]
-        dead_agent.alive = False
-        r,c = dead_agent.location
-        self.world.agent_map[r,c] = 0.0
-        rewards[self.impostor_index] = self.kill_reward
-    
-    # Check kill win condition
-    if self.world.num_agents <= 2:
+    # Check kill win condition for impostor
+    if self.world.num_agents <= 1 and self.agents[self.impostor_index].alive:
         add_rewards = -self.win_reward * np.ones(self.num_agents) # Or 0?
         add_rewards[self.impostor_index] = self.win_reward
         rewards = rewards + add_rewards # I think this does what I want it to...
         self.ongoing = False
         # Return something
-    
-    # TODO: voting someone out and winning based off that
-    if (self.num_steps + 1) % self.vote_period == 0:
-        # Perform voting
-    
+
+    # Check kill win condition for crewmates
+    if not self.agents[self.impostor_index].alive:
+        add_rewards = self.win_reward * np.ones(self.num_agents)
+        add_rewards[self.impostor_index] = -self.win_reward # Or 0?
+        rewards = rewards + add_rewards # I think this does what I want it to...
+        self.ongoing = False
+        # Return something
+
     self.num_steps += 1
     if self.num_steps >= self.max_steps:
         self.ongoing = False
+        # Return something
 
   def __repr__(self) -> str:
     world_arr = np.array(np.maximum(self.world.map, self.world.agent_map), dtype=object)

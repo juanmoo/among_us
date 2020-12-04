@@ -1,4 +1,5 @@
 import numpy as np
+from matplotlib import pyplot as plt
 
 class World:
 
@@ -13,12 +14,12 @@ class World:
   '''
   agent_offset = 100
 
-  def __init__(self, n, num_tasks):
+  def __init__(self, n, num_tasks, gui=False):
     # Initialize nxn map 
     self.n = n
     self.num_tasks = num_tasks
     self.tasks_left = num_tasks
-    
+
     # Generate blank map
     world_map = np.zeros(n*n)
     self.agent_map = np.zeros((n, n))
@@ -30,6 +31,13 @@ class World:
     # Make map the right dimensions
     world_map = world_map.reshape((n, n))
     self.map = world_map
+
+    # if gui:
+    #   fig = plt.figure()
+    #   fig.set_dpi(100)
+    #   fig.set_size_inches(8, 8)
+    #   ax = plt.axes(xlim=(0, n), ylim=(0, n))
+
 
   def set_agent_list(self, agents):
     self.agents = agents
@@ -51,7 +59,7 @@ class World:
     return False
 
   def kill_agent(self, id):
-    dead_agent = self.agents[to_kill]
+    dead_agent = self.agents[id]
     dead_agent.alive = False
     r,c = dead_agent.location
     self.agent_map[r,c] = 0.0
