@@ -12,7 +12,8 @@ class Game:
     'task_reward': 3,
     'win_reward': 100,
     'kill_reward': 3,
-    'message_length': 1
+    'message_length': 1,
+    'impostor_frac': 0.1 #TODO: increase number of impostors
   }
 
   def __init__(self, map_size, num_tasks, num_agents, max_steps, vote_period, params=params):
@@ -44,6 +45,7 @@ class Game:
 
     # Instatntiate num_agents - 1 Crewmates and 1 Impostor agents
     self.impostor_index = random.randint(0, self.num_agents-1)
+    # self.impostor_indices = rng.choice(self) TODO: multiple impostors
     self.agents = []
     for i in range(self.num_agents):
         if i == self.impostor_index:
@@ -56,18 +58,18 @@ class Game:
     self.ongoing = True
     self.num_steps = 0
   
-  def step(self):
+  def step(self, actions):
     # This function returns the new observation for each agent,
     # The reward they got,
     # Whether the game is done 
     to_kill = None
     rewards = np.zeros(self.num_agents)
     votes = []
-    
-    for agent in self.agents:
-        
 
-        action = agent.get_action()
+    for j, action in enumerate(actions):
+    # for agent in self.agents:
+        # action = agent.get_action()
+
         # Assume action to be a row vector 
         # Index 0 represents kill(0) or move(1)
         # Index 1 represents which direction to move
@@ -76,6 +78,7 @@ class Game:
 
         # Record Vote
         votes.append(action[2])
+        agent = self.agents[j]
 
         # Dead agents cannot do anything
         if not agent.alive:
@@ -101,7 +104,7 @@ class Game:
 
     # Kill someone
     if to_kill is not None:
-        print('Agent {} killed agent {}'.format(self.impostor_index, to_kill.id))
+        # print('Agent {} killed agent {}'.format(self.impostor_index, to_kill.id))
         self.world.kill_agent(to_kill.id)
         dead_agent = self.agents[to_kill.id]
         rewards[self.impostor_index] += self.kill_reward
@@ -110,12 +113,12 @@ class Game:
     # Perform voting
     if (self.num_steps + 1) % self.vote_period == 0:
         votes = [v for j, v in enumerate(votes) if self.agents[j].alive]
-        print(set(votes))
+        # print('Votes: {}'.format(votes))
         to_kick = max(set(votes), key=votes.count)
         to_kick = int(to_kick)
 
         if 0 <= to_kick < len(self.agents) and self.agents[to_kick].alive:
-          print('{} Agents voted to kick Agent {}'.format(self.world.num_agents, to_kick))
+          # print('{} Agents voted to kick Agent {}'.format(self.world.num_agents, to_kick))
           self.world.kill_agent(to_kick)
     
     # Check task win condition
@@ -127,7 +130,7 @@ class Game:
         # Return something
     
     # Check kill win condition for impostor
-    if self.world.num_agents <= 1 and self.agents[self.impostor_index].alive:
+    elif self.world.num_agents <= 1 and self.agents[self.impostor_index].alive:
         add_rewards = -self.win_reward * np.ones(self.num_agents) # Or 0?
         add_rewards[self.impostor_index] = self.win_reward
         rewards = rewards + add_rewards # I think this does what I want it to...
@@ -135,7 +138,7 @@ class Game:
         # Return something
 
     # Check kill win condition for crewmates
-    if not self.agents[self.impostor_index].alive:
+    elif not self.agents[self.impostor_index].alive:
         add_rewards = self.win_reward * np.ones(self.num_agents)
         add_rewards[self.impostor_index] = -self.win_reward # Or 0?
         rewards = rewards + add_rewards # I think this does what I want it to...
@@ -146,6 +149,20 @@ class Game:
     if self.num_steps >= self.max_steps:
         self.ongoing = False
         # Return something
+
+    observations = self.get_observations()
+    
+    return (observations, rewards, self.ongoing)
+
+  def get_observations(self):
+    return [a.get_observation() for a in self.agents]
+
+  def get_actions(self, model, obs):
+    actions = []
+    for a, o in zip(self.agents, obs):
+        actions.append(model.get_action(a, o))
+    return actions
+
 
   def __repr__(self) -> str:
     world_arr = np.array(np.maximum(self.world.map, self.world.agent_map), dtype=object)
