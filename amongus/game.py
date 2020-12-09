@@ -166,30 +166,28 @@ class Game:
             rewards = rewards + add_rewards
             self.ongoing = False
             self.win_condition = 'Impostors Erradicated'
+        
+        # Check task win condition
+        if self.world.tasks_left <= 0:
+          self.ongoing = False
+          add_rewards = np.zeros(self.num_agents)
+
+          for j in range(self.num_agents):
+            if j not in self.impostor_set:
+              add_rewards += self.win_reward
+          rewards = rewards + add_rewards
+
+          self.win_condition = 'Tasks Completed'
 
         self.num_steps += 1
         if self.num_steps >= self.max_steps:
-            self.ongoing = False
+          add_rewards = np.zeros(self.num_agents)
+          for j in self.impostor_set:
+            add_rewards[j] = self.win_reward
 
-            # Check task win condition
-            if self.world.tasks_left <= 0:
-              add_rewards = np.zeros(self.num_agents)
-
-              for j in range(self.num_agents):
-                if j not in self.impostor_set:
-                  add_rewards += self.win_reward
-              rewards = rewards + add_rewards
-
-              self.win_condition = 'Tasks Completed'
-            
-            else: # Impostors won b/c tasks were not completed
-              add_rewards = np.zeros(self.num_agents)
-              for j in self.impostor_set:
-                add_rewards[j] = self.win_reward
-
-              rewards += add_rewards
-              self.ongoing = False
-              self.win_condition = 'Uncompleted Tasks'
+          rewards += add_rewards
+          self.ongoing = False
+          self.win_condition = 'Uncompleted Tasks'
 
 
         observations = self.get_observations()
@@ -212,8 +210,8 @@ class Game:
         def make_blank(x):
             if x == 0.0:
                 return ''
-            elif x == 1.0:
-                return 'G'  # Goal Location
+            elif x < 100.0:
+                return 'G-{:^d}'.format(int(x))  # Goal Location
             else:
                 return 'A{:^d}'.format(int(x - World.agent_offset))
 

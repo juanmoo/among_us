@@ -25,19 +25,18 @@ class World:
     self.agent_map = np.zeros((n, n))
 
     # Add tasks at front
-    world_map[:num_tasks] = 1
-    # Randomly shuffle the tasks in 
-    np.random.shuffle(world_map)
+    task_locs = np.random.choice(n*n, size=self.num_tasks, replace=False)
+    world_map[task_locs] = range(1,self.num_tasks+1)
+    
     # Make map the right dimensions
     world_map = world_map.reshape((n, n))
     self.map = world_map
-
-    # if gui:
-    #   fig = plt.figure()
-    #   fig.set_dpi(100)
-    #   fig.set_size_inches(8, 8)
-    #   ax = plt.axes(xlim=(0, n), ylim=(0, n))
-
+    
+    # Create the task list
+    coord_map = np.vectorize(lambda x: (x//n, x % n))
+    self.task_list = np.vstack(coord_map(task_locs))
+    self.task_list = np.vstack([self.task_list, np.zeros(self.num_tasks)]).T
+    
 
   def set_agent_list(self, agents):
     self.agents = agents
@@ -52,8 +51,10 @@ class World:
     r, c = self.agents[id].update_location(move_action)
     self.agent_map[r, c] = World.agent_offset + id
     # Check if agent is a crewmate and that there is a task at the new location
-    if self.map[r, c] == 1.0 and self.agents[id].agent_type == 'Crewmate':
+    if self.map[r, c] > 0.0 and self.agents[id].agent_type == 'Crewmate':
       self.tasks_left -= 1
+      task_idx = int(self.map[r, c] - 1)
+      self.task_list[task_idx,2] = 1.0
       self.map[r, c] == 0.0
       return True
     return False

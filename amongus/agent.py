@@ -1,4 +1,4 @@
-from amongus.model import Model
+# from amongus.model import Model
 import numpy as np
 import random
 
@@ -26,7 +26,7 @@ class Agent:
                 in_map_r = (0 <= cr + i < self.world.n)
                 in_map_c = (0 <= cc + j < self.world.n)
                 in_map = in_map_r and in_map_c
-                if in_map and i**2 + j**2 <= self.vision_radius**2:
+                if in_map:
                     reading = self.world.agent_map[cr + i, cc + j]
                     if reading >= 100:
                         agents_seen.append(
@@ -46,34 +46,12 @@ class Agent:
                 in_map_r = (0 <= cr + i < self.world.n)
                 in_map_c = (0 <= cc + j < self.world.n)
                 in_map = in_map_r and in_map_c
-                if in_map and i**2 + j**2 <= self.vision_radius**2:
+                if in_map:
                     mask[cr + i, cc + j] = 1.0
 
         obs = (base_world, self.world.agent_map * mask)
 
         return obs
-
-    # TODO: need to remove decision making from agent
-    def get_action(self):
-        # return [action, direction, vote, *message_bits]
-        # action \in {0, 1} => {move, kill}
-        # direction \in {0, 1, 3, 4, 5, 6, 7}
-        # vote \in [0, len(self.world.agents)]
-        # message_bits \in [0, 1]^(n * k - k)
-
-        action_length = 3 + (len(self.world.agents) - 1) * self.message_length
-        # action = np.array([-1] * action_length, dtype=np.float64)
-        action = np.random.random(action_length)
-
-        # TEMP:
-        action[0] = np.random.randint(0, 2)  # random action
-        action[1] = np.random.randint(0, 8)  # ranodom direction
-
-        ids = [e for e in range(0, len(self.world.agents)) if e != self.id]
-        random.shuffle(ids)
-        action[2] = ids[0]  # random id
-
-        return action
 
     def update_location(self, move_action):
         # 0: up
